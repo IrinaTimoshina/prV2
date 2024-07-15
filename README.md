@@ -28,15 +28,13 @@
 - **PATCH /files/{file_id}**: Обновить информацию о файле.
 
 
-**запуск проекта в PyCharm**
-git clone https://github.com/IrinaTimoshina/prV2
-cd файловое-хранилище
-В терминале PyCharm пишем команду:
-pip install -r requirements.txt
-запускаем main.py
-Открываем браузер и переходим по адресу http://127.0.0.1:8000/docs для просмотра и взаимодествия
+**Запуск проекта в PyCharm**
+1. В терминале PyCharm пишем команду: pip install -r requirements.txt
+2. запускаем main.py.
+3. В терминале PyCharm пишем команду: uvicorn app.main:app --reload
+4. Открываем браузер и переходим по адресу http://127.0.0.1:8000/docs для просмотра и взаимодествия.
 
-## взимодействие через комнадую строку:
+## Взимодействие через cmd:
 **Загрузка файла:**
 curl -X POST "http://127.0.0.1:8000/files/" -F "file=@path/to/your/file.txt" -F "comment=Ваш комментарий"
 **Получение списка файлов:**

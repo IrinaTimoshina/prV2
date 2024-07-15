@@ -35,17 +35,17 @@
 4. Открываем браузер и переходим по адресу http://127.0.0.1:8000/docs для просмотра и взаимодествия.
 
 ## Взимодействие через cmd:
-**Загрузка файла:**
+- **Загрузка файла:**
 curl -X POST "http://127.0.0.1:8000/files/" -F "file=@path/to/your/file.txt" -F "comment=Ваш комментарий"
-**Получение списка файлов:**
+- **Получение списка файлов:**
 curl -X GET "http://127.0.0.1:8000/files/" -H "accept: application/json"
-**Получение информации о конкретном файле:**
+- **Получение информации о конкретном файле:**
 curl -X GET "http://127.0.0.1:8000/files/name" -H "accept: application/json"
-**Изменение информации о файле:**
+- **Изменение информации о файле:**
 curl -X PATCH "http://127.0.0.1:8000/files/1" -H "Content-Type: application/json" -d '{
     "name": "edit-file",
     "path": "./uploaded_files/new-path/",
     "comment": "edit comment"
 }'
-**Удаление файла:**
+- **Удаление файла:**
 curl -X DELETE "http://127.0.0.1:8000/files/name" -H "accept: application/json"

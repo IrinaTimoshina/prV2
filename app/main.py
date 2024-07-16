@@ -2,6 +2,7 @@ from fastapi import FastAPI, UploadFile, File, Depends, HTTPException
 from sqlalchemy.orm import Session
 import shutil
 import os
+from sqlalchemy.exc import SQLAlchemyError
 from datetime import datetime
 from . import models, schemas, crud
 from .database import SessionLocal, engine
@@ -81,23 +82,34 @@ async def delete_file(file_name: str, db: Session = Depends(get_db)):
     return file_info
 
 
-# Update file endpoint
+# Update file info endpoint
 @app.patch("/files/{file_id}", response_model=schemas.File)
 async def update_file(file_id: int, file_update: schemas.FileUpdate, db: Session = Depends(get_db)):
-    db_file = crud.update_file(db, file_id, file_update)
-    if not db_file:
+    file_info = crud.get_file(db, file_id)
+    if not file_info:
         raise HTTPException(status_code=404, detail="File not found")
 
-    # Update the file path and name in the file system if they have changed
-    if file_update.name or file_update.path:
-        new_name = file_update.name if file_update.name else db_file.name
-        new_path = file_update.path if file_update.path else db_file.path
-        new_extension = db_file.extension
-        new_full_name = f"{new_name}{new_extension}"
-        new_full_path = os.path.join(new_path, new_full_name)
+    old_path = file_info.path
+    new_name = file_update.name if file_update.name else file_info.name
+    new_path = file_update.path if file_update.path else os.path.dirname(file_info.path)
+    new_file_path = os.path.join(new_path, new_name + file_info.extension)
 
-        os.rename(db_file.path, new_full_path)
-        db_file.path = new_full_path
-        db_file.name = new_name
+    if new_file_path != old_path:
+        os.makedirs(os.path.dirname(new_file_path), exist_ok=True)
+        os.rename(old_path, new_file_path)
 
-    return db_file
+    updated_data = {
+        "name": new_name,
+        "path": new_path,
+        "updated_at": datetime.datetime.utcnow().isoformat(),
+        "comment": file_update.comment
+    }
+
+    try:
+        updated_file = crud.update_file(db, file_id, updated_data)
+    except SQLAlchemyError as e:
+        os.rename(new_file_path, old_path)  # Rollback the file renaming in case of a database error
+        raise HTTPException(status_code=500, detail=str(e))
+
+    return updated_file
+

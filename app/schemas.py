@@ -2,6 +2,7 @@ from pydantic import BaseModel, Field
 from typing import Optional
 from datetime import datetime
 
+
 class FileBase(BaseModel):
     name: str = Field(..., example="my-file")
     extension: str = Field(..., example=".txt")
@@ -11,13 +12,16 @@ class FileBase(BaseModel):
     updated_at: Optional[datetime] = Field(None, example=None)
     comment: Optional[str] = Field(None, example="Мой первый текстовый файл")
 
+
 class FileCreate(FileBase):
     pass
+
 
 class FileUpdate(BaseModel):
     name: Optional[str] = Field(None, example="updated-file")
     path: Optional[str] = Field(None, example="./uploaded_files/new-path/")
     comment: Optional[str] = Field(None, example="Updated comment")
+
 
 class File(FileBase):
     id: int

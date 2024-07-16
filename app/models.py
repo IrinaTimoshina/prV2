@@ -2,6 +2,7 @@ from sqlalchemy import Column, Integer, String, DateTime
 from datetime import datetime
 from .database import Base
 
+
 class File(Base):
     __tablename__ = "files"
 

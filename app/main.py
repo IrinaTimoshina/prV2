@@ -30,20 +30,22 @@ async def db_session_middleware(request, call_next):
 
 # Upload file endpoint
 @app.post("/files/", response_model=schemas.File)
-async def create_file(file: UploadFile = File(...), comment: str = None, db: Session = Depends(get_db)):
+async def create_file(
+    file: UploadFile = File(...), comment: str = None, db: Session = Depends(get_db)
+):
     file_path = f"./uploaded_files/{file.filename}"
     os.makedirs(os.path.dirname(file_path), exist_ok=True)
     with open(file_path, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
 
     file_data = {
-        "name": file.filename.rsplit('.', 1)[0],
-        "extension": '.' + file.filename.rsplit('.', 1)[1],
+        "name": file.filename.rsplit(".", 1)[0],
+        "extension": "." + file.filename.rsplit(".", 1)[1],
         "size": os.path.getsize(file_path),
         "path": file_path,
         "created_at": datetime.utcnow(),
         "updated_at": None,
-        "comment": comment
+        "comment": comment,
     }
 
     return crud.create_file(db=db, file=schemas.FileCreate(**file_data))
@@ -84,7 +86,9 @@ async def delete_file(file_name: str, db: Session = Depends(get_db)):
 
 # Update file info endpoint
 @app.patch("/files/{file_id}", response_model=schemas.File)
-async def update_file(file_id: int, file_update: schemas.FileUpdate, db: Session = Depends(get_db)):
+async def update_file(
+    file_id: int, file_update: schemas.FileUpdate, db: Session = Depends(get_db)
+):
     file_info = crud.get_file(db, file_id)
     if not file_info:
         raise HTTPException(status_code=404, detail="File not found")
@@ -102,14 +106,15 @@ async def update_file(file_id: int, file_update: schemas.FileUpdate, db: Session
         "name": new_name,
         "path": new_path,
         "updated_at": datetime.datetime.utcnow().isoformat(),
-        "comment": file_update.comment
+        "comment": file_update.comment,
     }
 
     try:
         updated_file = crud.update_file(db, file_id, updated_data)
     except SQLAlchemyError as e:
-        os.rename(new_file_path, old_path)  # Rollback the file renaming in case of a database error
+        os.rename(
+            new_file_path, old_path
+        )  # Rollback the file renaming in case of a database error
         raise HTTPException(status_code=500, detail=str(e))
 
     return updated_file
-

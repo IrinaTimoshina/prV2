@@ -28,7 +28,7 @@
 - **PATCH /files/{file_id}**: Обновить информацию о файле.
 
 
-**Запуск проекта в PyCharm**
+## Запуск проекта в PyCharm**
 1. В терминале PyCharm пишем команду: pip install -r requirements.txt
 2. запускаем main.py.
 3. В терминале PyCharm пишем команду: uvicorn app.main:app --reload

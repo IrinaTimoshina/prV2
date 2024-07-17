@@ -55,6 +55,7 @@ async def create_file(file: UploadFile = File(...), comment: str = "", db: Sessi
 
     return crud.create_file(db=db, file=file_create)
 
+
 # List files endpoint
 @app.get("/files/", response_model=list[schemas.File])
 async def list_files(db: Session = Depends(get_db)):
@@ -80,16 +81,28 @@ async def update_file(file_id: int, file_update: schemas.FileUpdate, db: Session
     # Сохраняем старый путь перед обновлением
     old_path = db_file.path
 
-    # Обновляем данные файла
+    # Проверяем и обновляем данные файла
+    if file_update.name:
+        # Удаляем символы "/" из названия файла
+        new_name = file_update.name.replace("/", "")
+
+        # Если после удаления "/" название стало пустым, выдаем ошибку
+        if not new_name:
+            raise HTTPException(status_code=400, detail="File name cannot be empty or contain '/'")
+
+        db_file.name = new_name
+
     if file_update.path:
         new_path = file_update.path
+
+        # Проверяем безопасность пути
+        if not is_safe_path(new_path):
+            raise HTTPException(status_code=400, detail="Unsafe file path")
+
         os.makedirs(os.path.dirname(new_path), exist_ok=True)
-        new_full_path = os.path.join(new_path, f"{file_update.name}{db_file.extension}")
+        new_full_path = os.path.join(new_path, f"{db_file.name}{db_file.extension}")
         os.rename(db_file.path, new_full_path)
         db_file.path = new_full_path
-
-    if file_update.name:
-        db_file.name = file_update.name
 
     if file_update.comment is not None:
         db_file.comment = file_update.comment
@@ -101,6 +114,16 @@ async def update_file(file_id: int, file_update: schemas.FileUpdate, db: Session
     db.refresh(db_file)
 
     return db_file
+
+
+def is_safe_path(path: str) -> bool:
+    """
+    Проверяет, является ли путь безопасным для сохранения файлов в директории 'uploaded_files'.
+    """
+    base_path = os.path.abspath("./uploaded_files")
+    requested_path = os.path.abspath(path)
+
+    return os.path.commonpath([base_path]) == os.path.commonpath([base_path, requested_path])
 
 
 # Delete file endpoint

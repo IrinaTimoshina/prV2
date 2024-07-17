@@ -2,10 +2,11 @@ from fastapi import FastAPI, UploadFile, File, Depends, HTTPException
 from sqlalchemy.orm import Session
 import shutil
 import os
-from sqlalchemy.exc import SQLAlchemyError
 from datetime import datetime
-from . import models, schemas, crud
-from .database import SessionLocal, engine
+import models
+import schemas
+import crud
+from database import SessionLocal, engine
 
 models.Base.metadata.create_all(bind=engine)
 
@@ -30,32 +31,34 @@ async def db_session_middleware(request, call_next):
 
 # Upload file endpoint
 @app.post("/files/", response_model=schemas.File)
-async def create_file(
-    file: UploadFile = File(...), comment: str = None, db: Session = Depends(get_db)
-):
+async def create_file(file: UploadFile = File(...), comment: str = "", db: Session = Depends(get_db)):
     file_path = f"./uploaded_files/{file.filename}"
     os.makedirs(os.path.dirname(file_path), exist_ok=True)
     with open(file_path, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
 
+    # Получаем размер файла с помощью os.path.getsize
+    file_size = os.path.getsize(file_path)
+
     file_data = {
-        "name": file.filename.rsplit(".", 1)[0],
-        "extension": "." + file.filename.rsplit(".", 1)[1],
-        "size": os.path.getsize(file_path),
+        "name": file.filename.rsplit('.', 1)[0],
+        "extension": '.' + file.filename.rsplit('.', 1)[1],
+        "size": file_size,
         "path": file_path,
-        "created_at": datetime.utcnow(),
+        "created_at": datetime.utcnow().isoformat(),
         "updated_at": None,
-        "comment": comment,
+        "comment": comment
     }
 
-    return crud.create_file(db=db, file=schemas.FileCreate(**file_data))
+    # Преобразование словаря в Pydantic модель
+    file_create = schemas.FileCreate(**file_data)
 
+    return crud.create_file(db=db, file=file_create)
 
 # List files endpoint
 @app.get("/files/", response_model=list[schemas.File])
 async def list_files(db: Session = Depends(get_db)):
-    files = crud.get_files(db)
-    return files
+    return crud.get_files(db)
 
 
 # Get file info endpoint
@@ -63,58 +66,55 @@ async def list_files(db: Session = Depends(get_db)):
 async def get_file_info(file_name: str, db: Session = Depends(get_db)):
     file_info = crud.get_file_by_name(db, file_name)
     if not file_info:
-        raise HTTPException(status_code=404, detail="File not found")
-    return file_info
-
-
-# Delete file endpoint
-@app.delete("/files/{file_name}", response_model=schemas.File)
-async def delete_file(file_name: str, db: Session = Depends(get_db)):
-    file_info = crud.get_file_by_name(db, file_name)
-    if not file_info:
-        raise HTTPException(status_code=404, detail="File not found")
-
-    file_path = file_info.path
-    if os.path.exists(file_path):
-        os.remove(file_path)
-    else:
-        raise HTTPException(status_code=404, detail="File not found on disk")
-
-    crud.delete_file(db, file_info)
+        raise HTTPException(status_code=404, detail="File info not found in database")
     return file_info
 
 
 # Update file info endpoint
 @app.patch("/files/{file_id}", response_model=schemas.File)
-async def update_file(
-    file_id: int, file_update: schemas.FileUpdate, db: Session = Depends(get_db)
-):
-    file_info = crud.get_file(db, file_id)
+async def update_file(file_id: int, file_update: schemas.FileUpdate, db: Session = Depends(get_db)):
+    db_file = crud.get_file(db, file_id)
+    if not db_file:
+        raise HTTPException(status_code=404, detail="File not found")
+
+    # Сохраняем старый путь перед обновлением
+    old_path = db_file.path
+
+    # Обновляем данные файла
+    if file_update.path:
+        new_path = file_update.path
+        os.makedirs(os.path.dirname(new_path), exist_ok=True)
+        new_full_path = os.path.join(new_path, f"{file_update.name}{db_file.extension}")
+        os.rename(db_file.path, new_full_path)
+        db_file.path = new_full_path
+
+    if file_update.name:
+        db_file.name = file_update.name
+
+    if file_update.comment is not None:
+        db_file.comment = file_update.comment
+
+    db_file.updated_at = datetime.utcnow()
+
+    # Сохраняем обновленный файл в базе данных
+    db.commit()
+    db.refresh(db_file)
+
+    return db_file
+
+
+# Delete file endpoint
+@app.delete("/files/{file_name}", response_model=dict)
+async def delete_file(file_name: str, db: Session = Depends(get_db)):
+    file_info = crud.get_file_by_name(db, file_name)
     if not file_info:
         raise HTTPException(status_code=404, detail="File not found")
 
-    old_path = file_info.path
-    new_name = file_update.name if file_update.name else file_info.name
-    new_path = file_update.path if file_update.path else os.path.dirname(file_info.path)
-    new_file_path = os.path.join(new_path, new_name + file_info.extension)
-
-    if new_file_path != old_path:
-        os.makedirs(os.path.dirname(new_file_path), exist_ok=True)
-        os.rename(old_path, new_file_path)
-
-    updated_data = {
-        "name": new_name,
-        "path": new_path,
-        "updated_at": datetime.datetime.utcnow().isoformat(),
-        "comment": file_update.comment,
-    }
-
     try:
-        updated_file = crud.update_file(db, file_id, updated_data)
-    except SQLAlchemyError as e:
-        os.rename(
-            new_file_path, old_path
-        )  # Rollback the file renaming in case of a database error
-        raise HTTPException(status_code=500, detail=str(e))
+        os.remove(file_info.path)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to delete file: {str(e)}")
 
-    return updated_file
+    crud.delete_file(db, file_name)
+
+    return {"detail": "File deleted"}

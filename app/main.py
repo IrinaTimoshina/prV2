@@ -12,7 +12,6 @@ models.Base.metadata.create_all(bind=engine)
 
 app = FastAPI()
 
-
 # Dependency
 def get_db():
     db = SessionLocal()
@@ -21,17 +20,15 @@ def get_db():
     finally:
         db.close()
 
-
 # Middleware
 @app.middleware("http")
 async def db_session_middleware(request, call_next):
     response = await call_next(request)
     return response
 
-
 # Upload file endpoint
 @app.post("/files/", response_model=schemas.File)
-async def create_file(file: UploadFile = File(...), comment: str = "", db: Session = Depends(get_db)):
+def create_file(file: UploadFile = File(...), comment: str = "", db: Session = Depends(get_db)):
     file_path = os.path.join("./uploaded_files", file.filename)
     os.makedirs(os.path.dirname(file_path), exist_ok=True)
     with open(file_path, "wb") as buffer:
@@ -55,31 +52,25 @@ async def create_file(file: UploadFile = File(...), comment: str = "", db: Sessi
 
     return crud.create_file(db=db, file=file_create)
 
-
 # List files endpoint
 @app.get("/files/", response_model=list[schemas.File])
-async def list_files(db: Session = Depends(get_db)):
+def list_files(db: Session = Depends(get_db)):
     return crud.get_files(db)
-
 
 # Get file info endpoint
 @app.get("/files/{file_id}", response_model=schemas.File)
-async def get_file_info(file_id: int, db: Session = Depends(get_db)):
+def get_file_info(file_id: int, db: Session = Depends(get_db)):
     file_info = crud.get_file(db, file_id)
     if not file_info:
         raise HTTPException(status_code=404, detail="File info not found in database")
     return file_info
 
-
 # Update file info endpoint
 @app.patch("/files/{file_id}", response_model=schemas.File)
-async def update_file(file_id: int, file_update: schemas.FileUpdate, db: Session = Depends(get_db)):
+def update_file(file_id: int, file_update: schemas.FileUpdate, db: Session = Depends(get_db)):
     db_file = crud.get_file(db, file_id)
     if not db_file:
         raise HTTPException(status_code=404, detail="File not found")
-
-    # Сохраняем старый путь перед обновлением
-    old_path = db_file.path
 
     # Проверяем и обновляем данные файла
     if file_update.name:
@@ -115,7 +106,6 @@ async def update_file(file_id: int, file_update: schemas.FileUpdate, db: Session
 
     return db_file
 
-
 def is_safe_path(path: str) -> bool:
     """
     Проверяет, является ли путь безопасным для сохранения файлов в директории 'uploaded_files'.
@@ -125,10 +115,9 @@ def is_safe_path(path: str) -> bool:
 
     return os.path.commonpath([base_path]) == os.path.commonpath([base_path, requested_path])
 
-
 # Delete file endpoint
 @app.delete("/files/{file_id}", response_model=dict)
-async def delete_file(file_id: int, db: Session = Depends(get_db)):
+def delete_file(file_id: int, db: Session = Depends(get_db)):
     file_info = crud.get_file(db, file_id)
     if not file_info:
         raise HTTPException(status_code=404, detail="File not found")
@@ -141,3 +130,4 @@ async def delete_file(file_id: int, db: Session = Depends(get_db)):
     crud.delete_file(db, file_id)
 
     return {"detail": "File deleted"}
+

@@ -8,9 +8,18 @@ import schemas
 import crud
 from database import SessionLocal, engine
 
+# Пример относительного импорта
+from config import DATABASE_URL, UPLOAD_DIR
+
+# from app.config import DATABASE_URL, UPLOAD_DIR
+
+# Инициализация моделей в базе данных
 models.Base.metadata.create_all(bind=engine)
 
 app = FastAPI()
+
+# Определение пути для сохранения загруженных файлов
+UPLOAD_PATH = UPLOAD_DIR
 
 
 # Dependency
@@ -32,18 +41,20 @@ async def db_session_middleware(request, call_next):
 # Upload file endpoint
 @app.post("/files/", response_model=schemas.File)
 async def create_file(file: UploadFile = File(...), comment: str = "", db: Session = Depends(get_db)):
-    file_path = f"./uploaded_files/{file.filename}"
+    file_path = os.path.join(UPLOAD_PATH, file.filename)
+
+    # Проверяем безопасность пути
+    if not is_safe_path(file_path):
+        raise HTTPException(status_code=400, detail="Unsafe file path")
+
     os.makedirs(os.path.dirname(file_path), exist_ok=True)
     with open(file_path, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
 
-    # Получаем размер файла с помощью os.path.getsize
-    file_size = os.path.getsize(file_path)
-
     file_data = {
         "name": file.filename.rsplit('.', 1)[0],
         "extension": '.' + file.filename.rsplit('.', 1)[1],
-        "size": file_size,
+        "size": os.path.getsize(file_path),
         "path": file_path,
         "created_at": datetime.utcnow().isoformat(),
         "updated_at": None,
@@ -63,9 +74,9 @@ async def list_files(db: Session = Depends(get_db)):
 
 
 # Get file info endpoint
-@app.get("/files/{file_name}", response_model=schemas.File)
-async def get_file_info(file_name: str, db: Session = Depends(get_db)):
-    file_info = crud.get_file_by_name(db, file_name)
+@app.get("/files/{file_id}", response_model=schemas.File)
+async def get_file_info(file_id: int, db: Session = Depends(get_db)):
+    file_info = crud.get_file(db, file_id)
     if not file_info:
         raise HTTPException(status_code=404, detail="File info not found in database")
     return file_info
@@ -116,20 +127,10 @@ async def update_file(file_id: int, file_update: schemas.FileUpdate, db: Session
     return db_file
 
 
-def is_safe_path(path: str) -> bool:
-    """
-    Проверяет, является ли путь безопасным для сохранения файлов в директории 'uploaded_files'.
-    """
-    base_path = os.path.abspath("./uploaded_files")
-    requested_path = os.path.abspath(path)
-
-    return os.path.commonpath([base_path]) == os.path.commonpath([base_path, requested_path])
-
-
 # Delete file endpoint
-@app.delete("/files/{file_name}", response_model=dict)
-async def delete_file(file_name: str, db: Session = Depends(get_db)):
-    file_info = crud.get_file_by_name(db, file_name)
+@app.delete("/files/{file_id}", response_model=dict)
+async def delete_file(file_id: int, db: Session = Depends(get_db)):
+    file_info = crud.get_file(db, file_id)
     if not file_info:
         raise HTTPException(status_code=404, detail="File not found")
 
@@ -138,6 +139,16 @@ async def delete_file(file_name: str, db: Session = Depends(get_db)):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to delete file: {str(e)}")
 
-    crud.delete_file(db, file_name)
+    crud.delete_file(db, file_id)
 
     return {"detail": "File deleted"}
+
+
+def is_safe_path(path: str) -> bool:
+    """
+    Проверяет, является ли путь безопасным для сохранения файлов в директории 'uploaded_files'.
+    """
+    base_path = os.path.abspath(UPLOAD_PATH)
+    requested_path = os.path.abspath(path)
+
+    return os.path.commonpath([base_path]) == os.path.commonpath([base_path, requested_path])

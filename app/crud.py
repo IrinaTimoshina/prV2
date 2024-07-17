@@ -36,8 +36,12 @@ def update_file(db: Session, file_id: int, file_data: schemas.FileUpdate):
     return None
 
 
-def delete_file(db: Session, name: str):
-    db_file = get_file_by_name(db, name)
+def get_file_by_id(db: Session, file_id: int):
+    return db.query(models.File).filter(models.File.id == file_id).first()
+
+
+def delete_file(db: Session, file_id: int):
+    db_file = get_file_by_id(db, file_id)
     if db_file:
         db.delete(db_file)
         db.commit()
